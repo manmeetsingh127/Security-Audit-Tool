@@ -1,11 +1,16 @@
 import socket
-import requests
+import json
 import ipaddress
-from fpdf import FPDF
-import streamlit as st
 import concurrent.futures
+import streamlit as st
+from fpdf import FPDF
 
-# Function to validate IP address
+# Load vulnerability database
+def load_vulnerability_db(filename="vulnerabilities.json"):
+    with open(filename, "r") as f:
+        return json.load(f)
+
+# Validate IP addresses
 def is_valid_ip(ip):
     try:
         ipaddress.ip_address(ip)
@@ -13,165 +18,88 @@ def is_valid_ip(ip):
     except ValueError:
         return False
 
-# Function to scan ports
+# Scan a single port
 def scan_port(ip, port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    try:
-        if sock.connect_ex((ip, port)) == 0:
-            return port
-    except socket.error:
-        return None
-    finally:
-        sock.close()
-    return None
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1)
+        return port if sock.connect_ex((ip, port)) == 0 else None
 
+# Scan ports concurrently
 def scan_ports(ip, start_port=1, end_port=1024):
-    open_ports = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
         results = executor.map(lambda port: scan_port(ip, port), range(start_port, end_port + 1))
-        open_ports = [port for port in results if port is not None]
-    return open_ports
+    return [port for port in results if port is not None]
 
-# Service mappings
-service_to_software = {
-    "ssh": ("openbsd", "openssh"),
-    "http": ("apache", "http_server"),
-    "https": ("apache", "http_server"),
-    "ftp": ("vsftpd", "vsftpd"),
-    "smtp": ("postfix", "postfix"),
-    "mysql": ("oracle", "mysql"),
-    "postgresql": ("postgresql", "postgresql"),
-    "dns": ("bind", "bind9"),
-    "smb": ("microsoft", "smb"),
-    "redis": ("redis", "redis"),
-    "mongodb": ("mongodb", "mongodb"),
-    "telnet": ("telnet", "telnet"),
-    "pop3": ("cyrus", "cyrus_pop3d"),
-    "imap": ("dovecot", "dovecot"),
-    "vnc": ("realvnc", "vnc"),
-    "docker": ("docker", "docker"),
-}
-
-# Get service name
+# Identify service name
 def get_service_name(port):
-    try:
-        return socket.getservbyport(port, "tcp")
-    except OSError:
-        return "Unknown"
+    return {
+        22: "ssh", 80: "http", 443: "https", 21: "ftp", 25: "smtp", 3306: "mysql", 
+        5432: "postgresql", 3389: "rdp", 23: "telnet", 53: "dns", 445: "smb"
+    }.get(port, "Unknown")
 
-# Fetch CVE details
-def get_cve_info(service_name, max_cves=3):
-    if service_name not in service_to_software:
-      return [{"id": "N/A", "description": "No CVE data available", "severity": "N/A"}]
-    
-    vendor, product = service_to_software[service_name]
-    api_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={product}&resultsPerPage={max_cves}"
-    
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if "vulnerabilities" in data and data["vulnerabilities"]:
-            return [
-                {
-                    "id": vuln["cve"].get("id", "Unknown"),
-                    # "name": vuln["cve"].get("id", "Unknown CVE"),
-                    # "type": "Unknown",
-                    "description": vuln["cve"].get("descriptions", [{}])[0].get("value", "No description available"),
-                    "severity": vuln.get("cve", {}).get("metrics", {}).get("cvssMetricV2", [{}])[0].get("baseSeverity", "Unknown"),
-                    "url": f"https://nvd.nist.gov/vuln/detail/{vuln['cve'].get('id', 'Unknown')}"
-                }
-                for vuln in data["vulnerabilities"][:max_cves]
-            ]
-        
-        return [{"id": "N/A", "name": "Unknown", "type": "Unknown", "description": "No known CVEs found", "severity": "N/A"}]
-    except requests.RequestException as e:
-        return [{"id": "N/A", "name": "Unknown", "type": "Unknown", "description": f"Error fetching CVE data: {str(e)}", "severity": "N/A"}]
-
-# Scan vulnerabilities
-def scan_vulnerabilities(ip, open_ports, max_cves=3):
+# Scan for vulnerabilities
+def scan_vulnerabilities(ip, open_ports):
+    db = load_vulnerability_db()
     results = {}
     for port in open_ports:
-        service_name = get_service_name(port)
-        cves = get_cve_info(service_name, max_cves)
-        results[port] = {"service": service_name, "cves": cves}
+        service = get_service_name(port)
+        cves = db.get(service, [{"id": "N/A", "name": "Unknown", "type": "Unknown", "severity": "N/A", "description": "No CVE data available"}])
+        results[port] = {"service": service, "cves": cves}
     return results
 
-# Generate PDF Report
-def generate_pdf_report(data, filename="audit_report.pdf"):
+# Generate PDF Report for multiple IPs
+def generate_pdf_report(scan_data, filename="audit_report.pdf"):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Security Audit Report", ln=True, align="C")
-    pdf.ln(10)
-
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"Target IP: {data['Target IP']}", ln=True)
-    pdf.ln(5)
-
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Port Scan Results:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 10, str(data["Port Scan Results"]))
-    pdf.ln(5)
-
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Vulnerability Scan Results:", ln=True)
-    pdf.set_font("Arial", size=10)
-    for port, details in data["Vulnerability Results"].items():
-        pdf.cell(0, 10, f"Port {port} ({details['service']}):", ln=True)
-        for cve in details["cves"]:
-            pdf.multi_cell(0, 10, f"- {cve.get('name', 'Unknown')} ({cve.get('id', 'Unknown')}) ({cve.get('type', 'Unknown')}) ({cve.get('severity', 'Unknown')})\n  {cve.get('description', 'No description available')}")
+    
+    for data in scan_data:
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"Target IP: {data['Target IP']}", ln=True)
+        
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "Vulnerability Scan Results:", ln=True)
+        pdf.set_font("Arial", size=10)
+        
+        for port, details in data["Vulnerability Results"].items():
+            pdf.multi_cell(0, 10, f"Port {port} ({details['service']}):")
+            for cve in details["cves"]:
+                pdf.multi_cell(0, 10, f"- {cve['name']} ({cve['id']}) ({cve['type']}) ({cve['severity']})\n  {cve['description']}")
+        
         pdf.ln(5)
-
+    
     pdf.output(filename)
-    return filename
+    st.success(f"PDF report saved as {filename}")
 
 # Streamlit UI
+st.set_page_config(page_title="Security Audit Tool", layout="wide")
+
 st.title("Security Audit Tool")
 
-ip_input = st.text_input("Enter IP Address for Security Audit")
+ip_input = st.text_area("Enter IP Addresses (comma-separated)")
 start_port = st.number_input("Start Port", min_value=1, max_value=65535, value=1)
 end_port = st.number_input("End Port", min_value=1, max_value=65535, value=1024)
-max_cves = st.slider("Max CVEs per service", 1, 10, 3)
 
-# Initialize session state
-if "open_ports" not in st.session_state:
-    st.session_state["open_ports"] = []
-
-if "vuln_results" not in st.session_state:
-    st.session_state["vuln_results"] = {}
-
-# Port Scan Button
-if st.button("Start Port Scan"):
-    if ip_input and is_valid_ip(ip_input):
-        with st.spinner("Scanning ports..."):
-            st.session_state["open_ports"] = scan_ports(ip_input, start_port, end_port)
-        st.write(f"Open Ports: {st.session_state['open_ports']}")
-
-# Vulnerability Scan Button
-if st.button("Scan for Vulnerabilities"):
-    if ip_input and st.session_state["open_ports"]:
-        with st.spinner("Scanning for vulnerabilities..."):
-            st.session_state["vuln_results"] = scan_vulnerabilities(ip_input, st.session_state["open_ports"], max_cves)
-        st.json(st.session_state["vuln_results"])
+if st.button("Start Scan"):
+    ip_list = [ip.strip() for ip in ip_input.split(",") if is_valid_ip(ip.strip())]
+    if not ip_list:
+        st.error("Please enter at least one valid IP address.")
     else:
-        st.error("Run port scan first!")
+        scan_results = []
+        for ip in ip_list:
+            open_ports = scan_ports(ip, start_port, end_port)
+            vuln_results = scan_vulnerabilities(ip, open_ports)
 
-# PDF Report Button
-if st.button("Generate PDF Report"):
-    if ip_input and st.session_state["open_ports"] and st.session_state["vuln_results"]:
-        report_data = {
-            "Target IP": ip_input,
-            "Port Scan Results": st.session_state["open_ports"],
-            "Vulnerability Results": st.session_state["vuln_results"]
-        }
-        pdf_filename = generate_pdf_report(report_data)
+            scan_data = {
+                "Target IP": ip,
+                "ports": open_ports,
+                "Vulnerability Results": vuln_results,
+            }
+            scan_results.append(scan_data)
 
-        # Provide PDF download option
-        with open(pdf_filename, "rb") as f:
-            st.download_button("Download Report", f, file_name=pdf_filename, mime="application/pdf")
-    else:
-        st.error("Run scans before generating report!")
+            st.write(f"Results for {ip}:")
+            st.json(vuln_results)
+
+        if st.button("Download Report"):
+            generate_pdf_report(scan_results)

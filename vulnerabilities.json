@@ -1,0 +1,112 @@
+{
+    "ssh": [
+        {
+            "id": "CVE-2018-15473",
+            "name": "OpenSSH User Enumeration",
+            "type": "Information Disclosure",
+            "severity": "High",
+            "description": "Allows remote attackers to enumerate valid users.",
+            "solution": "Upgrade to a patched version of OpenSSH."
+        }
+    ],
+    "http": [
+        {
+            "id": "CVE-2021-41773",
+            "name": "Apache Path Traversal",
+            "type": "Directory Traversal",
+            "severity": "Critical",
+            "description": "Improper validation allows attackers to map URLs to files outside the document root.",
+            "solution": "Upgrade Apache to version 2.4.50 or later."
+        }
+    ],
+    "https": [
+        {
+            "id": "CVE-2014-0160",
+            "name": "Heartbleed",
+            "type": "Information Disclosure",
+            "severity": "Critical",
+            "description": "Allows reading sensitive memory contents in TLS.",
+            "solution": "Upgrade OpenSSL to version 1.0.1g or later."
+        }
+    ],
+    "ftp": [
+        {
+            "id": "CVE-2011-2523",
+            "name": "VSFTPD Backdoor",
+            "type": "Remote Code Execution",
+            "severity": "Critical",
+            "description": "A backdoor in VSFTPD allows remote command execution.",
+            "solution": "Upgrade to a secure version of VSFTPD."
+        }
+    ],
+    "smtp": [
+        {
+            "id": "CVE-2020-14609",
+            "name": "Postfix Spoofing Vulnerability",
+            "type": "Spoofing",
+            "severity": "High",
+            "description": "Allows sending spoofed emails via Postfix.",
+            "solution": "Apply security patches from the vendor."
+        }
+    ],
+    "mysql": [
+        {
+            "id": "CVE-2021-27928",
+            "name": "MySQL Unauthorized Access",
+            "type": "Privilege Escalation",
+            "severity": "High",
+            "description": "A flaw in authentication allows unauthorized access.",
+            "solution": "Upgrade MySQL to the latest version."
+        }
+    ],
+    "postgresql": [
+        {
+            "id": "CVE-2021-32029",
+            "name": "PostgreSQL Memory Corruption",
+            "type": "Memory Corruption",
+            "severity": "Medium",
+            "description": "A vulnerability can cause memory corruption.",
+            "solution": "Update PostgreSQL to the latest version."
+        }
+    ],
+    "rdp": [
+        {
+            "id": "CVE-2019-0708",
+            "name": "BlueKeep (RDP Remote Code Execution)",
+            "type": "Remote Code Execution",
+            "severity": "Critical",
+            "description": "Allows unauthenticated attackers to execute code remotely.",
+            "solution": "Apply Microsoft patch KB4499175."
+        }
+    ],
+    "telnet": [
+        {
+            "id": "CVE-2019-0136",
+            "name": "Telnet Credential Leak",
+            "type": "Information Disclosure",
+            "severity": "High",
+            "description": "Telnet sends passwords in plaintext.",
+            "solution": "Disable Telnet and use SSH."
+        }
+    ],
+    "dns": [
+        {
+            "id": "CVE-2021-25220",
+            "name": "DNS Cache Poisoning",
+            "type": "Spoofing",
+            "severity": "High",
+            "description": "Attackers can manipulate DNS responses.",
+            "solution": "Use DNSSEC and apply software patches."
+        }
+    ],
+    "smb": [
+        {
+            "id": "CVE-2020-0796",
+            "name": "SMBGhost (Windows SMBv3)",
+            "type": "Remote Code Execution",
+            "severity": "Critical",
+            "description": "A flaw in SMBv3 allows remote attackers to execute arbitrary code.",
+            "solution": "Disable SMBv3 compression and apply patches."
+        }
+    ]
+}
