@@ -70,36 +70,68 @@ def generate_pdf_report(scan_data, filename="audit_report.pdf"):
         pdf.ln(5)
     
     pdf.output(filename)
-    st.success(f"PDF report saved as {filename}")
 
 # Streamlit UI
 st.set_page_config(page_title="Security Audit Tool", layout="wide")
 
-st.title("Security Audit Tool")
+# Apply custom styling
+st.markdown("""
+    <style>
+        .stButton>button {
+            background-color: #4CAF50;
+            color: white;
+            font-size: 16px;
+            border-radius: 10px;
+            padding: 8px 16px;
+        }
+        .stTextArea textarea, .stNumberInput input {
+            font-size: 16px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-ip_input = st.text_area("Enter IP Addresses (comma-separated)")
-start_port = st.number_input("Start Port", min_value=1, max_value=65535, value=1)
-end_port = st.number_input("End Port", min_value=1, max_value=65535, value=1024)
+# Sidebar for input fields
+st.sidebar.title("🔍 Security Audit Tool")
+st.sidebar.markdown("Enter details below to begin the scan.")
 
-if st.button("Start Scan"):
+ip_input = st.sidebar.text_area("🖥️ Enter IP Addresses (comma-separated)")
+start_port = st.sidebar.number_input("🚪 Start Port", min_value=1, max_value=65535, value=1)
+end_port = st.sidebar.number_input("🚪 End Port", min_value=1, max_value=65535, value=1024)
+
+# Main page title
+st.title("🛡️ Security Audit Dashboard")
+
+# Start scan button
+if st.sidebar.button("🚀 Start Scan"):
     ip_list = [ip.strip() for ip in ip_input.split(",") if is_valid_ip(ip.strip())]
     if not ip_list:
-        st.error("Please enter at least one valid IP address.")
+        st.sidebar.error("❌ Please enter at least one valid IP address.")
     else:
         scan_results = []
-        for ip in ip_list:
+        progress_bar = st.progress(0)
+        status_placeholder = st.empty()
+
+        for index, ip in enumerate(ip_list):
+            status_placeholder.info(f"Scanning {ip}...")
             open_ports = scan_ports(ip, start_port, end_port)
             vuln_results = scan_vulnerabilities(ip, open_ports)
-
-            scan_data = {
-                "Target IP": ip,
-                "ports": open_ports,
-                "Vulnerability Results": vuln_results,
-            }
+            scan_data = {"Target IP": ip, "ports": open_ports, "Vulnerability Results": vuln_results}
             scan_results.append(scan_data)
 
-            st.write(f"Results for {ip}:")
-            st.json(vuln_results)
+            with st.expander(f"📌 Results for {ip}"):
+                st.write(f"**Open Ports:** {open_ports}")
+                st.json(vuln_results)
 
-        if st.button("Download Report"):
-            generate_pdf_report(scan_results)
+            progress_bar.progress((index + 1) / len(ip_list))
+        
+        status_placeholder.success("✅ Scan Completed!")
+        
+        if scan_results:
+            scan_results_json = json.dumps(scan_results, indent=4)
+            st.download_button(label="📥 Download Report (JSON)", data=scan_results_json, file_name="scan_results.json", mime="application/json")
+            
+            pdf_filename = "audit_report.pdf"
+            generate_pdf_report(scan_results, pdf_filename)
+            
+            with open(pdf_filename, "rb") as f:
+                st.download_button(label="📄 Download Report (PDF)", data=f, file_name=pdf_filename, mime="application/pdf")
